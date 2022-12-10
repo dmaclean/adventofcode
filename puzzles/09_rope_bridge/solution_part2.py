@@ -107,6 +107,9 @@ def adjust_tail(head: List[int], tail: List[int], tail_idx: int) -> None:
         tail[0] -= 1
         tail[1] -= 1
 
+    ################
+    # Non-diagonals
+    ################
     elif head[0] == tail[0] and head[1] == tail[1] + 2:
         # - - -
         # - H -
