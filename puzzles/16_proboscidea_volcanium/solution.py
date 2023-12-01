@@ -101,7 +101,7 @@ def calc_theoretical_highest_flow(n):
 root = None
 valves = {}
 flows_by_size = []
-with open('input.txt') as f:
+with open('reddit_tc2.txt') as f:
     for line in f.readlines():
         m = p.match(line.strip())
         name = m.group(1)
