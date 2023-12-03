@@ -2,9 +2,6 @@ import re
 
 
 def fix_line(line: str) -> str:
-    # new_line = ""
-    # for idx in range(len(line)):
-    #     if
     return line.replace('one', 'o1one') \
         .replace('two', 't2two') \
         .replace('three', 't3three') \
