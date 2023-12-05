@@ -26,10 +26,16 @@ def main():
         for line in f.readlines():
             trimmed = line.strip()
             if trimmed.startswith("seeds:"):
+                # First line, get all the seeds
                 seeds = [int(s) for s in trimmed.split(":")[1].strip().split(" ")]
             elif trimmed == "":
+                # Newline between sections, reset section
                 section = None
             else:
+                # We are either processing the map declaration (i.e. "seed-to-soil map:")
+                # or it is one of the range lines.
+                # For the declaration, parse the type and store that as the section value.
+                # For range lines, parse and add to the current dictionary.
                 if not section:
                     m = re.match("(\\w+-to-\\w+) map:", trimmed)
                     section = m.group(1)
