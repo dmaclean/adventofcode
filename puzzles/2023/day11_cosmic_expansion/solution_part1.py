@@ -1,6 +1,7 @@
-from typing import Tuple
+from functools import reduce
+from typing import List
 
-from day11utils import expand_space, find_galaxies
+from day11utils import find_galaxies, galaxy_dist
 
 
 def main():
@@ -22,10 +23,28 @@ def main():
         print(total)
 
 
-def galaxy_dist(g1: Tuple[int, int], g2: Tuple[int, int]) -> int:
-    x = abs(g1[1] - g2[1])
-    y = abs(g1[0] - g2[0])
-    return x + y
+def expand_space(space: List[List[str]]) -> None:
+    # Expand rows
+    indexes = []
+    for r in range(len(space)):
+        row = space[r]
+        empty = reduce(lambda x, y: x and y, [c == "." for c in row])
+        if empty:
+            indexes.append(r)
+
+    for i in sorted(indexes, reverse=True):
+        space.insert(i, ["." for _ in range(len(space[0]))])
+
+    # Expand columns
+    indexes = []
+    for c in range(len(space[0])):
+        empty = reduce(lambda x, y: x and y, [v == "." for v in [space[idx][c] for idx in range(len(space))]])
+        if empty:
+            indexes.append(c)
+
+    for i in sorted(indexes, reverse=True):
+        for r in range(len(space)):
+            space[r].insert(i, ".")
 
 
 def print_space(space):
