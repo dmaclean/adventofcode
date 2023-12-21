@@ -1,6 +1,4 @@
-import time
-from pprint import pprint
-from typing import List
+from typing import List, Optional
 
 
 def main():
@@ -9,49 +7,49 @@ def main():
         for line in f.readlines():
             platform.append(list(line.strip()))
 
-    snapshots = []
-    snapshots.append(deep_copy(platform))
-    snapshot_idx = 0
-    is_in_cycle = False
-    start = time.time()
-    i = 0
-    for i in range(1_000_000_000):
-        has_movement = run_cycle(platform)
-        iteration = is_same_as_a_snapshot(snapshots, platform)
+    snapshots = [deep_copy(platform)]
+    cycle_start_idx = 0
+    cycle = 0
+    for cycle in range(1_000_000_000):
+        run_cycle(platform)
+        iteration = detect_cycle(snapshots, platform)
         if iteration:
-            platform_load = calc_load(platform)
-            print(f"Iteration {i} has same snapshot as iteration {iteration}, "
-                  f"total snapshot len is {len(snapshots)}, "
-                  f"load is {platform_load}")
-            platform_loads = {i: calc_load(snapshots[i]) for i in range(len(snapshots))}
-            pprint(platform_loads)
-            cycle_len = i - iteration
-            offset = ((1_000_000_000 - i) % cycle_len) - 1
-            iteration_offset = iteration + offset
-            print(f"{iteration_offset} - {calc_load(snapshots[iteration_offset])}")
-            snapshot_idx = iteration
+            print(f"Iteration {cycle} has same snapshot as iteration {iteration}")
+            cycle_start_idx = iteration
             break
         else:
             snapshots.append(deep_copy(platform))
-            snapshot_idx = len(snapshots) - 1
-        # if i % 100_000 == 0:
-        #     print(f"Finished cycle {i} after {time.time() - start} seconds ({has_movement})")
+            cycle_start_idx = len(snapshots) - 1
 
-    cycle_start_idx = snapshot_idx
+    # Now that we know there is a cycle, we don't need to run every single
+    # iteration of the 1B to know the state of the platform.
+    # Instead, we can just use some modulus math to figure out where we would
+    # have landed, and what the platform state looks like.
+
+    # Take a slice of the snapshots to isolate the cycle.
     cycle_snapshots = snapshots[cycle_start_idx:]
-    pprint({i: calc_load(cycle_snapshots[i]) for i in range(len(cycle_snapshots))})
-    cycle_length = len(snapshots) - cycle_start_idx
-    i_ = (1_000_000_000 - 1 - i)
+    cycle_length = len(cycle_snapshots)
+    # Figure out how many "spin cycles" we had left to run.
+    # I think this part confused me the most because with the 1 billion
+    # I was working with a 1-based number, but the "cycle" value is 0-based
+    # so I lost track of where I was and whether I needed to subtract a 1.
+    # Anyways, a couple hours later, here we are with a solution.
+    i_ = (1_000_000_000 - 1 - cycle)
     cycle_idx = i_ % cycle_length
     final_snapshot = cycle_snapshots[cycle_idx]
 
     print(f"{cycle_idx} - {calc_load(final_snapshot)}")
-    # for s in snapshots:
-    #     print(calc_load(s))
 
 
+def detect_cycle(snapshots, platform) -> Optional[int]:
+    """
+    Check if the current state of the platform is the same as one of the existing snapshots
+    from a previous iteration.
 
-def is_same_as_a_snapshot(snapshots, platform):
+    :param snapshots: Collection of snapshots of previous platform states.
+    :param platform: The current state of the platform.
+    :return: The snapshot index of a matching snapshot, or None if no match.
+    """
     for i in range(len(snapshots)):
         if platform == snapshots[i]:
             return i
@@ -65,7 +63,11 @@ def deep_copy(platform):
     return copy_of_platform
 
 
-def run_cycle(platform):
+def run_cycle(platform) -> None:
+    """
+    Run through a full N, W, S, E cycle.
+    :param platform: The platform to manipulate
+    """
     while move(platform, "N"):
         pass
     while move(platform, "W"):
@@ -88,6 +90,17 @@ def calc_load(platform: List[List[str]]) -> int:
 
 
 def move(platform: List[List[str]], direction: str) -> bool:
+    """
+    Tilt the platform in the specified direction and report whether any movement occurred.
+
+    This function might have been more sensible to write as a while loop, where the loop
+    only stops when no movement is detected.  Instead, I moved those while loops up into
+    run_cycle().
+
+    :param platform: The platform to manipulate.
+    :param direction: The direction to tilt the platform.  One of "N", "W", "S", "E".
+    :return: True, if any rocks moved.  False, otherwise.
+    """
     has_movement = False
     for r in range(len(platform)):
         for c in range(len(platform[r])):
