@@ -53,7 +53,6 @@ def main():
         original_grid.append(row)
 
     entry_points = create_entry_points(original_grid)
-    # entry_points = [(0, 0, "R")]
     most_energized = 0
     for e in entry_points:
         splitters_used.clear()
@@ -78,7 +77,6 @@ def main():
                 continue
         if curr_energized > most_energized:
             most_energized = curr_energized
-        # print(f"Non-energized tiles: {len(not_energized)}, beams: {len(beams)}")
 
     print(most_energized)
 
