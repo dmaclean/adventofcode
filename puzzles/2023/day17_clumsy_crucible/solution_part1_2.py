@@ -1,3 +1,5 @@
+import logging
+import sys
 from typing import Tuple, List
 
 memo = {}
@@ -40,7 +42,7 @@ def grid_nav(grid, curr, path, end: Tuple[int, int], curr_steps_in_dir: int, dir
         # MOVE UP
         memo_key = f"{r}-{c}-{direction}-U-{curr_steps_in_dir}"
         if memo_key in memo:
-            # print(f"Found memo for {memo_key}")
+            logging.debug(f"Found memo for {memo_key}")
             up_cost = memo[memo_key]
             if up_cost and up_cost < min_cost:
                 min_cost = up_cost
@@ -49,17 +51,18 @@ def grid_nav(grid, curr, path, end: Tuple[int, int], curr_steps_in_dir: int, dir
             path.append(dest)
             steps_in_dir = 1 if direction != "U" else curr_steps_in_dir + 1
             up_cost = grid_nav(grid, dest, path, end, steps_in_dir, "U")
-            if up_cost and up_cost < min_cost:
-                min_cost = up_cost
-                min_cost_dir = "U"
-            memo[memo_key] = up_cost
+            if up_cost:
+                memo[memo_key] = up_cost
+                if up_cost < min_cost:
+                    min_cost = up_cost
+                    min_cost_dir = "U"
             path.pop()
     dest = (r, c - 1)
     if can_move(grid, curr, dest, path, direction, "L", curr_steps_in_dir):
         # MOVE LEFT
         memo_key = f"{r}-{c}-{direction}-L-{curr_steps_in_dir}"
         if memo_key in memo:
-            # print(f"Found memo for {memo_key}")
+            logging.debug(f"Found memo for {memo_key}")
             left_cost = memo[memo_key]
             if left_cost and left_cost < min_cost:
                 min_cost = left_cost
@@ -68,17 +71,18 @@ def grid_nav(grid, curr, path, end: Tuple[int, int], curr_steps_in_dir: int, dir
             path.append(dest)
             steps_in_dir = 1 if direction != "L" else curr_steps_in_dir + 1
             left_cost = grid_nav(grid, dest, path, end, steps_in_dir, "L")
-            if left_cost and left_cost < min_cost:
-                min_cost = left_cost
-                min_cost_dir = "L"
-            memo[memo_key] = left_cost
+            if left_cost:
+                memo[memo_key] = left_cost
+                if left_cost < min_cost:
+                    min_cost = left_cost
+                    min_cost_dir = "L"
             path.pop()
     dest = (r + 1, c)
     if can_move(grid, curr, dest, path, direction, "D", curr_steps_in_dir):
         # MOVE DOWN
         memo_key = f"{r}-{c}-{direction}-D-{curr_steps_in_dir}"
         if memo_key in memo:
-            # print(f"Found memo for {memo_key}")
+            logging.debug(f"Found memo for {memo_key}")
             down_cost = memo[memo_key]
             if down_cost and down_cost < min_cost:
                 min_cost = down_cost
@@ -87,17 +91,18 @@ def grid_nav(grid, curr, path, end: Tuple[int, int], curr_steps_in_dir: int, dir
             path.append(dest)
             steps_in_dir = 1 if direction != "D" else curr_steps_in_dir + 1
             down_cost = grid_nav(grid, dest, path, end, steps_in_dir, "D")
-            if down_cost and down_cost < min_cost:
-                min_cost = down_cost
-                min_cost_dir = "D"
-            memo[memo_key] = down_cost
+            if down_cost:
+                memo[memo_key] = down_cost
+                if down_cost < min_cost:
+                    min_cost = down_cost
+                    min_cost_dir = "D"
             path.pop()
     dest = (r, c + 1)
     if can_move(grid, curr, dest, path, direction, "R", curr_steps_in_dir):
         # MOVE RIGHT
         memo_key = f"{r}-{c}-{direction}-R-{curr_steps_in_dir}"
         if memo_key in memo:
-            # print(f"Found memo for {memo_key}")
+            logging.debug(f"Found memo for {memo_key}")
             right_cost = memo[memo_key]
             if right_cost and right_cost < min_cost:
                 min_cost = right_cost
@@ -106,26 +111,29 @@ def grid_nav(grid, curr, path, end: Tuple[int, int], curr_steps_in_dir: int, dir
             path.append(dest)
             steps_in_dir = 1 if direction != "R" else curr_steps_in_dir + 1
             right_cost = grid_nav(grid, dest, path, end, steps_in_dir, "R")
-            if right_cost and right_cost < min_cost:
-                min_cost = right_cost
-                min_cost_dir = "R"
-            memo[memo_key] = right_cost
-            # print(f"Persisted {memo_key} with {right_cost}")
+            if right_cost:
+                memo[memo_key] = right_cost
+                if right_cost < min_cost:
+                    min_cost = right_cost
+                    min_cost_dir = "R"
+            logging.debug(f"Persisted {memo_key} with {right_cost}")
             path.pop()
 
     if min_cost < 999999:
         min_paths[curr] = min_cost_dir
-        print(f"Min cost from {curr}|{curr_steps_in_dir}|{direction} is {min_cost + grid[r][c]}")
+        logging.debug(f"Min cost from {curr}|{curr_steps_in_dir}|{direction} is {min_cost + grid[r][c]}")
         return min_cost + grid[r][c]
     return None
 
 
-def print_optimal_path(end: Tuple[int, int]):
+def print_optimal_path(grid, end: Tuple[int, int]):
     r = 0
     c = 0
+    total = 0
     while (r, c) != end:
         d = min_paths[(r, c)]
-        print(f"({r}, {c}) - {d}")
+        total += grid[r][c]
+        print(f"({r}, {c}) - {d} ({grid[r][c]}   {total})")
         if d == "U":
             r -= 1
         elif d == "D":
@@ -139,7 +147,7 @@ def print_optimal_path(end: Tuple[int, int]):
 def main():
     grid = []
     path = []
-    with open("input.txt") as f:
+    with open("sample_input_2.txt") as f:
         for line in f.readlines():
             grid.append([int(v) for v in list(line.strip())])
 
@@ -150,4 +158,5 @@ def main():
 
 
 if __name__ == '__main__':
+    sys.setrecursionlimit(50000)
     main()
