@@ -1,6 +1,7 @@
 import dataclasses
 import heapq
 import logging
+import math
 import sys
 from heapq import heapify
 from time import time
@@ -54,9 +55,6 @@ def can_move(grid: List[List[Tuple[int, int]]],
              dir_of_dest: str) -> bool:
     if dest in path.nodes:
         return False
-    if len(path.nodes) > 1 and path.nodes[-2] == dest:
-        # Cannot go backwards
-        return False
     if dir_of_dest == path.direction and path.steps == 3:
         logging.debug(f"Cannot move: Already moved three steps to {dir_of_dest}.")
         return False
@@ -76,6 +74,8 @@ def djikstra(grid):
     heapify(q)
     while q:
         p = heapq.heappop(q).p
+        if p.heat_loss >= best_heat_loss:
+            continue
         curr = (0, 0) if not p.nodes else p.nodes[-1]
         r = curr[0]
         c = curr[1]
@@ -102,14 +102,15 @@ def try_to_move(curr, dest, dir_of_dest, grid, p, q, shortest, end):
 
         cached_val = get_cached_val(shortest, dest, dir_of_dest, p.steps)
         if not cached_val or cached_val > heat_loss:
+            # Update cached value if this is the shortest path we've seen so far for this tile and direction/steps
             set_cached_val(shortest, dest, dir_of_dest, p.steps, heat_loss)
             if dest == end and heat_loss < best_heat_loss:
                 best_heat_loss = heat_loss
                 print(f"Found new best heat loss of {best_heat_loss}")
-            clone = p.clone()
-            clone.take_step(grid, dir_of_dest, dest)
-            dist = heat_loss #math.sqrt((r - end[0]) ** 2 + (c - end[1]) ** 2)
-            heapq.heappush(q, HeapItem(clone, dist))
+        clone = p.clone()
+        clone.take_step(grid, dir_of_dest, dest)
+        dist = math.sqrt((r - end[0]) ** 2 + (c - end[1]) ** 2)
+        heapq.heappush(q, HeapItem(clone, dist))
             # print(f"Found new shortest path ({heat_loss}) to {dest}: {clone.nodes_with_cost(grid)}")
 
 
@@ -133,7 +134,7 @@ def set_cached_val(shortest, dest, dir_of_dest, steps, val):
 
 def main():
     grid = []
-    with open("sample_input_2.txt") as f:
+    with open("sample_input.txt") as f:
         for line in f.readlines():
             if not line:
                 continue
