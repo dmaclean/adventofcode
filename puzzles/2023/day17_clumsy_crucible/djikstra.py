@@ -1,10 +1,12 @@
 import dataclasses
 import heapq
 import logging
-import math
 import sys
 from heapq import heapify
+from time import time
 from typing import Tuple, List
+
+best_heat_loss = sys.maxsize
 
 
 @dataclasses.dataclass
@@ -29,9 +31,11 @@ class Path:
         self.nodes.append(dest)
         self.heat_loss += grid[dest[0]][dest[1]]
 
-    def __lt__(self, other):
-        if not isinstance(other, Path):
-            return -1
+    def nodes_with_cost(self, grid) -> str:
+        val = ""
+        for node in self.nodes:
+            val += f"{node} [{grid[node[0]][node[1]]}], "
+        return val
 
 
 @dataclasses.dataclass
@@ -48,8 +52,11 @@ def can_move(grid: List[List[Tuple[int, int]]],
              curr: Tuple[int, int],
              dest: Tuple[int, int],
              dir_of_dest: str) -> bool:
-    # if dest in path.nodes:
-    #     return False
+    if dest in path.nodes:
+        return False
+    if len(path.nodes) > 1 and path.nodes[-2] == dest:
+        # Cannot go backwards
+        return False
     if dir_of_dest == path.direction and path.steps == 3:
         logging.debug(f"Cannot move: Already moved three steps to {dir_of_dest}.")
         return False
@@ -67,24 +74,22 @@ def djikstra(grid):
     end = (len(grid) - 1, len(grid[0]) - 1)
     q = [HeapItem(Path([], "R", 0, 0), 0)]
     heapify(q)
-    best_heat_loss = sys.maxsize
     while q:
-        if len(q) % 10000:
-            print(f"Queue size: {len(q)}")
         p = heapq.heappop(q).p
         curr = (0, 0) if not p.nodes else p.nodes[-1]
         r = curr[0]
         c = curr[1]
 
-        try_to_move(curr, (r, c + 1), "R", grid, p, q, shortest, end, best_heat_loss)
-        try_to_move(curr, (r + 1, c), "D", grid, p, q, shortest, end, best_heat_loss)
-        try_to_move(curr, (r - 1, c), "U", grid, p, q, shortest, end, best_heat_loss)
-        try_to_move(curr, (r, c - 1), "L", grid, p, q, shortest, end, best_heat_loss)
+        try_to_move(curr, (r, c + 1), "R", grid, p, q, shortest, end)
+        try_to_move(curr, (r + 1, c), "D", grid, p, q, shortest, end)
+        try_to_move(curr, (r - 1, c), "U", grid, p, q, shortest, end)
+        try_to_move(curr, (r, c - 1), "L", grid, p, q, shortest, end)
 
     return shortest
 
 
-def try_to_move(curr, dest, dir_of_dest, grid, p, q, shortest, end, best_heat_loss):
+def try_to_move(curr, dest, dir_of_dest, grid, p, q, shortest, end):
+    global best_heat_loss
     if curr == dest:
         raise Exception("Current location is same as destination!")
     r = dest[0]
@@ -95,21 +100,40 @@ def try_to_move(curr, dest, dir_of_dest, grid, p, q, shortest, end, best_heat_lo
         if heat_loss >= best_heat_loss:
             return
 
-        # q.insert(0, clone)
-        if dest not in shortest or shortest[dest] > heat_loss:
-            shortest[dest] = heat_loss
+        cached_val = get_cached_val(shortest, dest, dir_of_dest, p.steps)
+        if not cached_val or cached_val > heat_loss:
+            set_cached_val(shortest, dest, dir_of_dest, p.steps, heat_loss)
             if dest == end and heat_loss < best_heat_loss:
                 best_heat_loss = heat_loss
+                print(f"Found new best heat loss of {best_heat_loss}")
             clone = p.clone()
             clone.take_step(grid, dir_of_dest, dest)
-            dist = math.sqrt((r - end[0]) ** 2 + (c - end[1]) ** 2)
+            dist = heat_loss #math.sqrt((r - end[0]) ** 2 + (c - end[1]) ** 2)
             heapq.heappush(q, HeapItem(clone, dist))
-            print(f"Found new shortest path ({heat_loss}) to {dest}: {clone.nodes}")
+            # print(f"Found new shortest path ({heat_loss}) to {dest}: {clone.nodes_with_cost(grid)}")
+
+
+def get_cached_val(shortest, dest, dir_of_dest, steps):
+    outer = shortest.get(dest)
+    if not outer:
+        return None
+    key = f"{dir_of_dest}-{steps}"
+    return outer.get(key)
+
+
+def set_cached_val(shortest, dest, dir_of_dest, steps, val):
+    key = f"{dir_of_dest}-{steps}"
+    if dest not in shortest:
+        shortest[dest] = {
+            key: val
+        }
+    else:
+        shortest[dest][key] = val
 
 
 def main():
     grid = []
-    with open("sample_input.txt") as f:
+    with open("sample_input_2.txt") as f:
         for line in f.readlines():
             if not line:
                 continue
@@ -121,4 +145,6 @@ def main():
 
 
 if __name__ == '__main__':
+    start = time()
     main()
+    print(f"Solved in {time() - start} seconds")
