@@ -26,12 +26,8 @@ def djikstra(grid: List[List[int]]) -> int:
             print(f"Queue size: {len(q)}")
         v, direction_from_prev, steps_in_dir = find_vertex_to_explore(q, prio_q, dist)
         if v == end:
-            # visualize_path(grid, prev, end)
-            viz_path(grid, dist, prev, end)
             return find_lowest_val(dist[v])  # dist[v]  # Fix the return value once we're settled on this
         remove_from_q(q, v, direction_from_prev, steps_in_dir)
-
-        # direction_from_prev, steps_in_dir = num_steps_in_direction(prev, v)
 
         # Explore all neighbors
         r = v[0]
@@ -39,61 +35,17 @@ def djikstra(grid: List[List[int]]) -> int:
 
         curr_cost = dist[v][direction_from_prev][steps_in_dir]
 
-        #########
-        # RIGHT
-        #########
-        dest = (r, c + 1)
-        dir_of_dest = "R"
-        steps_for_dest = steps_in_dir + 1 if dir_of_dest == direction_from_prev else 1
-        q_entry = f"{dest[0]}-{dest[1]}-{dir_of_dest}-{steps_for_dest}"
-        if q_entry in q and can_move(grid, v, dir_of_dest, direction_from_prev, steps_in_dir):
-            curr_dest_cost = dist[dest][dir_of_dest][steps_for_dest]
-            dest_cost = find_cost(grid, dest)
-            if curr_cost + dest_cost < curr_dest_cost:
-                dist[dest][dir_of_dest][steps_for_dest] = curr_cost + dest_cost
-                prev[dest][dir_of_dest][steps_for_dest] = (v, direction_from_prev, steps_in_dir)
-
-        ######
-        # UP
-        ######
-        dest = (r - 1, c)
-        dir_of_dest = "U"
-        steps_for_dest = steps_in_dir + 1 if dir_of_dest == direction_from_prev else 1
-        q_entry = f"{dest[0]}-{dest[1]}-{dir_of_dest}-{steps_for_dest}"
-        if q_entry in q and can_move(grid, v, dir_of_dest, direction_from_prev, steps_in_dir):
-            curr_dest_cost = dist[dest][dir_of_dest][steps_for_dest]
-            dest_cost = find_cost(grid, dest)
-            if curr_cost + dest_cost < curr_dest_cost:
-                dist[dest][dir_of_dest][steps_for_dest] = curr_cost + dest_cost
-                prev[dest][dir_of_dest][steps_for_dest] = (v, direction_from_prev, steps_in_dir)
-
-        ########
-        # DOWN
-        ########
-        dest = (r + 1, c)
-        dir_of_dest = "D"
-        steps_for_dest = steps_in_dir + 1 if dir_of_dest == direction_from_prev else 1
-        q_entry = f"{dest[0]}-{dest[1]}-{dir_of_dest}-{steps_for_dest}"
-        if q_entry in q and can_move(grid, v, dir_of_dest, direction_from_prev, steps_in_dir):
-            curr_dest_cost = dist[dest][dir_of_dest][steps_for_dest]
-            dest_cost = find_cost(grid, dest)
-            if curr_cost + dest_cost < curr_dest_cost:
-                dist[dest][dir_of_dest][steps_for_dest] = curr_cost + dest_cost
-                prev[dest][dir_of_dest][steps_for_dest] = (v, direction_from_prev, steps_in_dir)
-
-        ########
-        # LEFT
-        ########
-        dest = (r, c - 1)
-        dir_of_dest = "L"
-        steps_for_dest = steps_in_dir + 1 if dir_of_dest == direction_from_prev else 1
-        q_entry = f"{dest[0]}-{dest[1]}-{dir_of_dest}-{steps_for_dest}"
-        if q_entry in q and can_move(grid, v, dir_of_dest, direction_from_prev, steps_in_dir):
-            curr_dest_cost = dist[dest][dir_of_dest][steps_for_dest]
-            dest_cost = find_cost(grid, dest)
-            if curr_cost + dest_cost < curr_dest_cost:
-                dist[dest][dir_of_dest][steps_for_dest] = curr_cost + dest_cost
-                prev[dest][dir_of_dest][steps_for_dest] = (v, direction_from_prev, steps_in_dir)
+        for dest_and_dir in [((r, c + 1), "R"), ((r - 1, c), "U"), ((r + 1, c), "D"), ((r, c - 1), "L")]:
+            dest = dest_and_dir[0]
+            dir_of_dest = dest_and_dir[1]
+            steps_for_dest = steps_in_dir + 1 if dir_of_dest == direction_from_prev else 1
+            q_entry = f"{dest[0]}-{dest[1]}-{dir_of_dest}-{steps_for_dest}"
+            if q_entry in q and can_move(grid, v, dir_of_dest, direction_from_prev, steps_in_dir):
+                curr_dest_cost = dist[dest][dir_of_dest][steps_for_dest]
+                dest_cost = find_cost(grid, dest)
+                if curr_cost + dest_cost < curr_dest_cost:
+                    dist[dest][dir_of_dest][steps_for_dest] = curr_cost + dest_cost
+                    prev[dest][dir_of_dest][steps_for_dest] = (v, direction_from_prev, steps_in_dir)
 
 
 def find_cost(grid, v):
@@ -195,83 +147,13 @@ def init_structs(grid, start):
                 "L": {0: None, 1: None, 2: None, 3: None},
                 "R": {0: None, 1: None, 2: None, 3: None}
             }
-            # q[v] = {
-            #     "U": {0: start_val, 1: start_val, 2: start_val, 3: start_val},
-            #     "D": {0: start_val, 1: start_val, 2: start_val, 3: start_val},
-            #     "L": {0: start_val, 1: start_val, 2: start_val, 3: start_val},
-            #     "R": {0: start_val, 1: start_val, 2: start_val, 3: start_val}
-            # }
     return q, prio_q, dist, prev
-
-
-def viz_path(grid, dist, prev, end):
-    grid_copy = []
-    for r in grid:
-        gc_row = []
-        for c in r:
-            gc_row.append(c)
-        grid_copy.append(gc_row)
-
-    curr = end
-    while curr != (0, 0):
-        min_val = sys.maxsize
-        best_dir = None
-        best_steps = None
-        for direction, steps in dist[curr].items():
-            for step, val in steps.items():
-                if val < min_val:
-                    min_val = val
-                    best_dir = direction
-                    best_steps = step
-
-
-        if best_dir == "U":
-            grid_copy[curr[0]][curr[1]] = "^"
-            curr = (curr[0] + 1, curr[1])
-        elif best_dir == "D":
-            grid_copy[curr[0]][curr[1]] = "v"
-            curr = (curr[0] - 1, curr[1])
-        elif best_dir == "L":
-            grid_copy[curr[0]][curr[1]] = "<"
-            curr = (curr[0], curr[1] + 1)
-        elif best_dir == "R":
-            grid_copy[curr[0]][curr[1]] = ">"
-            curr = (curr[0], curr[1] - 1)
-    for g in grid_copy:
-        print(''.join([str(_) for _ in g]))
-
-def visualize_path(grid, prev, end):
-    grid_copy = []
-    for r in grid:
-        gc_row = []
-        for c in r:
-            gc_row.append(c)
-        grid_copy.append(gc_row)
-
-    curr_vertex = end
-    prev_vertex = prev[curr_vertex]
-    while prev_vertex:
-        r = curr_vertex[0]
-        c = curr_vertex[1]
-        d = determine_direction(prev_vertex, curr_vertex)
-        if d == "U":
-            grid_copy[r][c] = "^"
-        elif d == "D":
-            grid_copy[r][c] = "v"
-        elif d == "R":
-            grid_copy[r][c] = ">"
-        elif d == "L":
-            grid_copy[r][c] = "<"
-        curr_vertex = prev_vertex
-        prev_vertex = prev[curr_vertex]
-    for g in grid_copy:
-        print(''.join([str(_) for _ in g]))
 
 
 def main():
     start = time.time()
     grid = []
-    with open("input.txt") as f:
+    with open("sample_input.txt") as f:
         for line in f.readlines():
             if not line:
                 continue
