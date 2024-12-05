@@ -15,55 +15,25 @@ fn main() -> io::Result<()> {
     let mut found_count: i32 = 0;
     for i in 0..crossword.len() {
         for j in 0..crossword[i].len() {
-            if crossword[i][j] != 'X' {
+            if crossword[i][j] != 'A' 
+                || i == 0 
+                || i == crossword.len() - 1 
+                || j == 0 
+                || j == crossword[i].len() - 1 
+            {
+                // Skip if the letter isn't 'A' or we are on the edge of the crossword
                 continue;
             }
 
-            // Check backwards
-            if j >= 3 && crossword[i][j - 1] == 'M' && crossword[i][j - 2] == 'A' && crossword[i][j - 3] == 'S' {
-                println!("Found backwards at ({}, {})", i, j);
-                found_count += 1;
-            }
-
-            // Check forwards
-            if j + 3 < crossword[i].len() && crossword[i][j + 1] == 'M' && crossword[i][j + 2] == 'A' && crossword[i][j + 3] == 'S' {
-                println!("Found forwards at ({}, {})", i, j);
-                found_count += 1;
-            }
-
-            // Check up
-            if i >= 3 && crossword[i - 1][j] == 'M' && crossword[i - 2][j] == 'A' && crossword[i - 3][j] == 'S' {
-                println!("Found up at ({}, {})", i, j);
-                found_count += 1;
-            }
-
-            // Check down
-            if i + 3 < crossword.len() && crossword[i + 1][j] == 'M' && crossword[i + 2][j] == 'A' && crossword[i + 3][j] == 'S' {
-                println!("Found down at ({}, {})", i, j);
-                found_count += 1;
-            }
-
-            // Check diagonal-up-left
-            if i >= 3 && j >= 3 && crossword[i - 1][j - 1] == 'M' && crossword[i - 2][j - 2] == 'A' && crossword[i - 3][j - 3] == 'S' {
-                println!("Found diagonal-up-left at ({}, {})", i, j);
-                found_count += 1;
-            }
-
-            // Check diagonal-up-right
-            if i >= 3 && j + 3 < crossword[i].len() && crossword[i - 1][j + 1] == 'M' && crossword[i - 2][j + 2] == 'A' && crossword[i - 3][j + 3] == 'S' {
-                println!("Found diagonal-up-right at ({}, {})", i, j);
-                found_count += 1;
-            }
-
-            // Check diagonal-down-left
-            if i + 3 < crossword.len() && j >= 3 && crossword[i + 1][j - 1] == 'M' && crossword[i + 2][j - 2] == 'A' && crossword[i + 3][j - 3] == 'S' {
-                println!("Found diagonal-down-left at ({}, {})", i, j);
-                found_count += 1;
-            }
-
-            // Check diagonal-down-right
-            if i + 3 < crossword.len() && j + 3 < crossword[i].len() && crossword[i + 1][j + 1] == 'M' && crossword[i + 2][j + 2] == 'A' && crossword[i + 3][j + 3] == 'S' {
-                println!("Found diagonal-down-right at ({}, {})", i, j);
+            if (
+                // Diagonal top-left to bottom-right is either M-A-S or S-A-M
+                (crossword[i-1][j-1] == 'M' && crossword[i+1][j+1] == 'S') ||
+                (crossword[i-1][j-1] == 'S' && crossword[i+1][j+1] == 'M')
+            ) && (
+                // Diagonal top-right to bottom-left is either M-A-S or S-A-M
+                (crossword[i-1][j+1] == 'M' && crossword[i+1][j-1] == 'S') ||
+                (crossword[i-1][j+1] == 'S' && crossword[i+1][j-1] == 'M')
+            ) {
                 found_count += 1;
             }
         }
