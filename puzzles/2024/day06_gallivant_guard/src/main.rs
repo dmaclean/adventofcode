@@ -1,32 +1,55 @@
 use std::collections::HashSet;
 use std::fs::File;
-use std::io::{BufReader, BufRead};
+use std::io::{self, BufReader, BufRead};
 use std::path::Path;
 
-/// Represents a visit to a cell on the map, storing the direction and coordinates
-#[derive(Debug, Clone, PartialEq)]
-struct Visit {
-    /// Direction the guard was facing when visiting this cell ('>', '<', '^', or 'v')
-    direction: char,
-    /// Row coordinate of the visited cell
-    x: usize,
-    /// Column coordinate of the visited cell
-    y: usize,
+type Position = (usize, usize);
+type VisitState = (usize, usize, char);
+type Grid = Vec<Vec<char>>;
+#[derive(Debug)]
+enum Error {
+    NoStartPosition,
+    Io(io::Error),
+    InvalidDirection(char),
 }
 
-/// Parse the input file into a 2D vector of characters representing the map.
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::NoStartPosition => write!(f, "No starting position found in map"),
+            Error::Io(err) => write!(f, "IO error: {}", err),
+            Error::InvalidDirection(c) => write!(f, "Invalid direction character: {}", c),
+        }
+    }
+}
+
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Error::Io(err) => Some(err),
+            _ => None
+        }
+    }
+}
+
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Self {
+        Error::Io(err)
+    }
+}
+
+/// Parse the input file into a 2D grid of characters.
 ///
 /// # Arguments
 ///
-/// * `input` - A BufReader containing the input file
+/// * `input` - A BufRead implementation containing the input file
 ///
 /// # Returns
 ///
-/// A Vec<Vec<char>> where each inner Vec represents a row of the map
-fn parse_input(input: BufReader<File>) -> Vec<Vec<char>> {
-    input
-        .lines()
-        .map(|line| line.unwrap().chars().collect())
+/// A Result containing the Grid (Vec<Vec<char>>) where each inner Vec represents a row
+fn parse_input(input: impl BufRead) -> io::Result<Grid> {
+    input.lines()
+        .map(|line| line.map(|l| l.chars().collect()))
         .collect()
 }
 
@@ -34,312 +57,152 @@ fn parse_input(input: BufReader<File>) -> Vec<Vec<char>> {
 ///
 /// # Arguments
 ///
-/// * `map` - The 2D vector representing the map
+/// * `map` - The 2D grid representing the map
 ///
 /// # Returns
 ///
-/// A tuple (row, column) indicating the guard's starting position
+/// A Result containing a Position tuple (row, column) indicating the guard's starting position
 ///
-/// # Panics
+/// # Errors
 ///
-/// Panics if no starting position ('^', 'v', '<', or '>') is found on the map
-fn find_start_position(map: &Vec<Vec<char>>) -> (usize, usize) {
-    for i in 0..map.len() {
-        for j in 0..map[i].len() {
-            if map[i][j] == '^' || map[i][j] == 'v' || map[i][j] == '<' || map[i][j] == '>' {
-                return (i, j);
+/// Returns NoStartPosition if no starting position ('^', 'v', '<', or '>') is found
+fn find_start_position(map: &Grid) -> Result<Position, Error> {
+    for (i, row) in map.iter().enumerate() {
+        for (j, &cell) in row.iter().enumerate() {
+            if matches!(cell, '^' | 'v' | '<' | '>') {
+                return Ok((i, j));
             }
         }
     }
-    panic!("Start position not found");
+    Err(Error::NoStartPosition)
 }
 
 /// Check if a given position is outside the map boundaries.
 ///
 /// # Arguments
 ///
-/// * `map` - The 2D vector representing the map
-/// * `i` - Row coordinate to check
-/// * `j` - Column coordinate to check
+/// * `map` - The 2D grid representing the map
+/// * `i` - Row coordinate to check (can be negative)
+/// * `j` - Column coordinate to check (can be negative)
 ///
 /// # Returns
 ///
 /// `true` if the position is off the map, `false` otherwise
-fn is_off_map(map: &Vec<Vec<char>>, i: isize, j: isize) -> bool {
-    i < 0 || j < 0 || i as usize >= map.len() || j as usize >= map[i as usize].len()
+fn is_off_map(map: &Grid, i: isize, j: isize) -> bool {
+    i < 0 || j < 0 || i as usize >= map.len() || j as usize >= map[0].len()
 }
 
 /// Check if a given position contains an obstacle.
 ///
 /// # Arguments
 ///
-/// * `map` - The 2D vector representing the map
+/// * `map` - The 2D grid representing the map
 /// * `i` - Row coordinate to check
 /// * `j` - Column coordinate to check
 ///
 /// # Returns
 ///
 /// `true` if the position contains an obstacle ('#'), `false` otherwise
-fn is_obstacle(map: &Vec<Vec<char>>, i: usize, j: usize) -> bool {
+fn is_obstacle(map: &Grid, i: usize, j: usize) -> bool {
     map[i][j] == '#'
 }
 
-/// Print the current state of the map to stdout.
+/// Get the next direction when hitting an obstacle (turning right).
 ///
 /// # Arguments
 ///
-/// * `map` - The 2D vector representing the map
-fn print_map(map: &Vec<Vec<char>>) {
-    for row in map {
-        for cell in row {
-            print!("{}", cell);
-        }
-        println!();
-    }
-}
-
-/// Check if moving in a given direction from a starting position will lead to a loop.
-///
-/// # Arguments
-///
-/// * `map` - The 2D vector representing the map
-/// * `visits` - Vector of previous Visit records
-/// * `start_x` - Starting row coordinate
-/// * `start_y` - Starting column coordinate
-/// * `direction` - Direction to check ('>', '<', '^', or 'v')
+/// * `direction` - Current direction character ('>', '<', '^', or 'v')
 ///
 /// # Returns
 ///
-/// `true` if a loop is found in the given direction, `false` otherwise
+/// A Result containing the next direction character after turning right
 ///
-/// # Panics
+/// # Errors
 ///
-/// Panics if an invalid direction character is provided
-fn check_direction_for_loop(
-    map: &Vec<Vec<char>>,
-    visits: &Vec<Visit>,
-    start_x: usize,
-    start_y: usize,
-    direction: char,
-) -> bool {
-    let mut x = start_x as isize;
-    let mut y = start_y as isize;
+/// Returns InvalidDirection if the input direction is not valid
+fn turn_right(direction: char) -> Result<char, Error> {
+    match direction {
+        '>' => Ok('v'),
+        'v' => Ok('<'),
+        '<' => Ok('^'),
+        '^' => Ok('>'),
+        c => Err(Error::InvalidDirection(c)),
+    }
+}
 
-    // Define direction offsets
-    let (dx, dy) = match direction {
-        '>' => (0, 1),
-        '<' => (0, -1),
-        '^' => (-1, 0),
-        'v' => (1, 0),
-        _ => panic!("Invalid direction"),
-    };
+/// Simulates the guard's path with an additional obstacle to check for loops.
+///
+/// # Arguments
+///
+/// * `original_map` - The original 2D grid representing the map
+/// * `obstacle_pos` - Position tuple (row, column) where to place the additional obstacle
+///
+/// # Returns
+///
+/// A Result containing a boolean: true if a loop is found, false if guard exits map
+///
+/// # Errors
+///
+/// Returns InvalidDirection if an invalid direction is encountered during simulation
+fn simulate_path_with_obstacle(original_map: &Grid, obstacle_pos: Position) -> Result<bool, Error> {
+    let mut map = original_map.clone();
+    let (obstacle_x, obstacle_y) = obstacle_pos;
+    map[obstacle_x][obstacle_y] = '#';
+
+    let (mut i, mut j) = find_start_position(&map)?;
+    let mut visits = HashSet::new();
+    visits.insert((i, j, map[i][j]));
 
     loop {
-        x += dx;
-        y += dy;
+        let (next_i, next_j) = match map[i][j] {
+            '>' => (i as isize, j as isize + 1),
+            '<' => (i as isize, j as isize - 1),
+            '^' => (i as isize - 1, j as isize),
+            'v' => (i as isize + 1, j as isize),
+            c => return Err(Error::InvalidDirection(c)),
+        };
 
-        // Check if we've gone off the map
-        if is_off_map(map, x, y) {
-            return false;
+        if is_off_map(&map, next_i, next_j) {
+            return Ok(false);
         }
 
-        let x_usize = x as usize;
-        let y_usize = y as usize;
+        let next_i = next_i as usize;
+        let next_j = next_j as usize;
 
-        // Check if we've hit an obstacle
-        if is_obstacle(map, x_usize, y_usize) {
-            return false;
+        if is_obstacle(&map, next_i, next_j) {
+            map[i][j] = turn_right(map[i][j])?;
+        } else {
+            map[next_i][next_j] = map[i][j];
+            i = next_i;
+            j = next_j;
         }
 
-        if visits.iter()
-            .filter(|v| v.x == x_usize && v.y == y_usize)
-            .any(|v| v.direction == direction) {
-            return true;
+        if !visits.insert((i, j, map[i][j])) {
+            return Ok(true);
         }
     }
 }
 
-fn main() {
-    let path = Path::new("sample_input3.txt");
-    let file = File::open(path).unwrap();
-    let reader = BufReader::new(file);
-    let mut map = parse_input(reader);
-    // println!("{:?}", map);
+fn main() -> Result<(), Error> {
+    let path = Path::new("input.txt");
+    let reader = BufReader::new(File::open(path)?);
+    let map = parse_input(reader)?;
 
-    let (start_x, start_y) = find_start_position(&map);
-    println!("Start position: ({}, {})", start_x, start_y);
-
-    let mut visits: Vec<Visit> = Vec::new();
-    let mut guard_on_map = true;
-    let mut i = start_x;
-    let mut j = start_y;
-    
-    visits.push(Visit {
-        direction: map[i][j],
-        x: i,
-        y: j,
-    });
+    let start_pos = find_start_position(&map)?;
+    println!("Start position: {:?}", start_pos);
 
     let mut num_loop_options = 0;
-    let mut num_obstacles_hit = 0;
-    while guard_on_map {
-        let current_direction = map[i][j];
-
-        if map[i][j] == '>' {
-            if is_off_map(&map, i as isize, j as isize + 1) {
-                map[i][j] = 'X';
-                guard_on_map = false;
-            } else if is_obstacle(&map, i, j + 1) {
-                num_obstacles_hit += 1;
-                visits.push(Visit {
-                    direction: '>',
-                    x: i,
-                    y: j,
-                });
-                visits.push(Visit {
-                    direction: 'v',
-                    x: i,
-                    y: j,
-                });
-                map[i][j] = 'v';
-            } else {
-                if !is_off_map(&map, i as isize + 1, j as isize)
-                    // && map[i + 1][j] == 'X'
-                    && check_direction_for_loop(&map, &visits, i, j, 'v')
-                    && num_obstacles_hit >= 3
-                {
-                    println!("Loop option found at ({}, {})", i + 1, j);
-                    num_loop_options += 1;
-                    // num_obstacles_hit = 0;
-                }
-                // map[i][j] = '';
-                map[i][j + 1] = '>';
-                // prev_i = i;
-                // prev_j = j;
-                j += 1;
-            }
-        } else if map[i][j] == '<' {
-            if is_off_map(&map, i as isize, j as isize - 1) {
-                map[i][j] = 'X';
-                guard_on_map = false;
-            } else if is_obstacle(&map, i, j - 1) {
-                num_obstacles_hit += 1;
-                visits.push(Visit {
-                    direction: '<',
-                    x: i,
-                    y: j,
-                });
-                visits.push(Visit {
-                    direction: '^',
-                    x: i,
-                    y: j,
-                });
-                map[i][j] = '^';
-            } else {
-                if !is_off_map(&map, i as isize - 1, j as isize)
-                    // && map[i - 1][j] == 'X'
-                    && check_direction_for_loop(&map, &visits, i, j, '^')
-                    && num_obstacles_hit >= 3
-                {
-                    println!("Loop option found at ({}, {})", i - 1, j);
-                    // num_obstacles_hit = 0;
-                    num_loop_options += 1;
-                }
-                // map[i][j] = 'X';
-                map[i][j - 1] = '<';
-                // prev_i = i;
-                // prev_j = j;
-                j -= 1;
-            }
-        } else if map[i][j] == '^' {
-            if is_off_map(&map, i as isize - 1, j as isize) {
-                map[i][j] = 'X';
-                guard_on_map = false;
-            } else if is_obstacle(&map, i - 1, j) {
-                num_obstacles_hit += 1;
-                visits.push(Visit {
-                    direction: '^',
-                    x: i,
-                    y: j,
-                });
-                visits.push(Visit {
-                    direction: '>',
-                    x: i,
-                    y: j,
-                });
-                map[i][j] = '>';
-            } else {
-                if !is_off_map(&map, i as isize - 1, j as isize)
-                    // && map[i - 1][j] == 'X'
-                    && check_direction_for_loop(&map, &visits, i, j, '>')
-                    && num_obstacles_hit >= 3
-                {
-                    println!("Loop option found at ({}, {})", i - 1, j);
-                    // num_obstacles_hit = 0;
-                    num_loop_options += 1;
-                }
-                // map[i][j] = 'X';
-                map[i - 1][j] = '^';
-                // prev_i = i;
-                // prev_j = j;
-                i -= 1;
-            }
-        } else if map[i][j] == 'v' {
-            if is_off_map(&map, i as isize + 1, j as isize) {
-                map[i][j] = 'X';
-                guard_on_map = false;
-            } else if is_obstacle(&map, i + 1, j) {
-                num_obstacles_hit += 1;
-                visits.push(Visit {
-                    direction: 'v',
-                    x: i,
-                    y: j,
-                });
-                visits.push(Visit {
-                    direction: '<',
-                    x: i,
-                    y: j,
-                });
-                map[i][j] = '<';
-            } else {
-                if !is_off_map(&map, i as isize + 1, j as isize)
-                    // && map[i + 1][j] == 'X'
-                    && check_direction_for_loop(&map, &visits, i, j, '<')
-                    && num_obstacles_hit >= 3
-                {
-                    println!("Loop option found at ({}, {})", i + 1, j);
-                    // num_obstacles_hit = 0;
-                    num_loop_options += 1;
-                }
-                // map[i][j] = 'X';
-                map[i + 1][j] = 'v';
-                // prev_i = i;
-                // prev_j = j;
-                i += 1;
-            }
-        }
-
-        if map[i][j] != 'X' && current_direction == map[i][j] {
-            visits.push(Visit {
-                direction: map[i][j],
-                x: i,
-                y: j,
-            });
-        }
-
-        println!();
-        println!("{:?}", visits.last().unwrap());
-        print_map(&map);
-    }
-
-    let mut num_visited = 0;
-    for row in map {
-        for cell in row {
-            if cell == 'X' {
-                num_visited += 1;
+    
+    // Try placing an additional obstacle at each empty position
+    for i in 0..map.len() {
+        for j in 0..map[0].len() {
+            if map[i][j] == '.' && simulate_path_with_obstacle(&map, (i, j))? {
+                println!("Loop option found with obstacle at ({}, {})", i, j);
+                num_loop_options += 1;
             }
         }
     }
-    println!("Number of visited cells: {}", num_visited);
+
     println!("Number of loop options: {}", num_loop_options);
+    Ok(())
 }
