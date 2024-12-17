@@ -95,14 +95,12 @@ fn calculate_checksum(disk: &[Block]) -> u64 {
         .sum()
 }
 
-/// Defragments the disk by moving whole files to the leftmost possible position.
+/// Defragments the disk by moving all files to the beginning of the disk.
 /// 
-/// This function implements the following strategy:
-/// 1. Identifies all files and their positions
-/// 2. Processes files in decreasing order of file ID
-/// 3. For each file:
-///    - Finds the leftmost span of empty blocks that can fit the file
-///    - Moves the entire file to that position if found
+/// This function implements a two-pointer approach to defragmentation:
+/// 1. Scans from left to find empty blocks
+/// 2. Scans from right to find file blocks
+/// 3. Swaps these blocks to consolidate files at the beginning
 /// 
 /// # Parameters
 /// 
@@ -110,90 +108,40 @@ fn calculate_checksum(disk: &[Block]) -> u64 {
 /// 
 /// # Returns
 /// 
-/// Returns a new `Vec<Block>` with files moved according to the strategy
+/// Returns a new `Vec<Block>` with all files moved to the beginning and empty blocks at the end
+/// 
+/// # Example
+/// 
+/// ```
+/// let disk = vec![Block::Empty, Block::File(1), Block::Empty, Block::File(0)];
+/// let defragged = defrag(disk);
+/// // Result: [Block::File(1), Block::File(0), Block::Empty, Block::Empty]
+/// ```
 fn defrag(mut disk: Vec<Block>) -> Vec<Block> {
-    // First, collect information about all files
-    let mut files: Vec<(usize, usize, usize)> = Vec::new(); // (file_id, start_pos, length)
-    let mut current_file_id = None;
-    let mut start_pos = 0;
-    let mut length = 0;
-
-    // Find all files and their positions
-    for (pos, block) in disk.iter().enumerate() {
-        match block {
-            Block::File(id) => {
-                if current_file_id == Some(*id) {
-                    length += 1;
-                } else {
-                    if current_file_id.is_some() {
-                        files.push((current_file_id.unwrap(), start_pos, length));
-                    }
-                    current_file_id = Some(*id);
-                    start_pos = pos;
-                    length = 1;
-                }
-            }
-            Block::Empty => {
-                if current_file_id.is_some() {
-                    files.push((current_file_id.unwrap(), start_pos, length));
-                    current_file_id = None;
-                    length = 0;
-                }
-            }
+    let mut left = 0;
+    let mut right = disk.len() - 1;
+    
+    while left < right {
+        // Skip non-empty blocks from the left
+        while left < disk.len() && disk[left] != Block::Empty {
+            left += 1;
         }
-    }
-    // Handle the last file if it extends to the end
-    if current_file_id.is_some() {
-        files.push((current_file_id.unwrap(), start_pos, length));
-    }
-
-    // Sort files by ID in descending order
-    files.sort_by(|a, b| b.0.cmp(&a.0));
-
-    // Process each file
-    for (file_id, current_start, length) in files {
-        let mut best_position = None;
-        let mut current_empty_start = None;
-        let mut current_empty_length = 0;
-
-        // Find the leftmost suitable empty space
-        for (pos, block) in disk.iter().enumerate() {
-            if pos >= current_start {
-                break; // Don't look beyond the file's current position
-            }
-
-            match block {
-                Block::Empty => {
-                    if current_empty_start.is_none() {
-                        current_empty_start = Some(pos);
-                    }
-                    current_empty_length += 1;
-
-                    if current_empty_length >= length {
-                        best_position = current_empty_start;
-                        break;
-                    }
-                }
-                Block::File(_) => {
-                    current_empty_start = None;
-                    current_empty_length = 0;
-                }
-            }
+        
+        // Skip empty blocks from the right
+        while right > left && disk[right] == Block::Empty {
+            right -= 1;
         }
-
-        // Move the file if we found a suitable position
-        if let Some(new_start) = best_position {
-            // Clear the old position
-            for i in current_start..current_start + length {
-                disk[i] = Block::Empty;
-            }
-            // Place the file in its new position
-            for i in new_start..new_start + length {
-                disk[i] = Block::File(file_id);
-            }
+        
+        if left >= right {
+            break;
         }
+        
+        // Swap blocks
+        disk.swap(left, right);
+        left += 1;
+        right -= 1;
     }
-
+    
     disk
 }
 
