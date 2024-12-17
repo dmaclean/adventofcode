@@ -1,0 +1,128 @@
+{
+    "name": "Rust Best Practices",
+    "description": "Rules for writing idiomatic and safe Rust code",
+    "rules": [
+        {
+            "name": "Memory Safety",
+            "instructions": [
+                "Always use the ownership system correctly - each value must have exactly one owner",
+                "Prefer references (&T) over raw pointers (*const T, *mut T) unless absolutely necessary",
+                "Use lifetimes explicitly when the borrow checker needs clarification",
+                "Avoid unsafe blocks unless there is no safe alternative, and document why unsafe is necessary",
+                "Use Arc<T> for thread-safe shared ownership, and Rc<T> for single-threaded reference counting"
+            ]
+        },
+        {
+            "name": "Error Handling",
+            "instructions": [
+                "Use Result<T, E> for operations that can fail",
+                "Create custom error types that implement std::error::Error",
+                "Avoid unwrap() and expect() in production code",
+                "Use the ? operator for error propagation",
+                "Implement Display and Debug traits for custom error types"
+            ]
+        },
+        {
+            "name": "Types and Traits",
+            "instructions": [
+                "Follow type names in CamelCase and function names in snake_case",
+                "Use derive macros for common traits when possible",
+                "Implement Drop trait for types that need custom cleanup",
+                "Use generics with trait bounds instead of concrete types when possible",
+                "Make use of the type system to prevent invalid states"
+            ]
+        },
+        {
+            "name": "Code Organization",
+            "instructions": [
+                "Organize code into modules using mod.rs pattern",
+                "Keep public interfaces minimal - use pub(crate) when possible",
+                "Document public APIs with /// doc comments",
+                "Use #[cfg(test)] for unit tests in the same file as the code",
+                "Follow the standard library's module organization pattern"
+            ]
+        },
+        {
+            "name": "Performance",
+            "instructions": [
+                "Use iterators instead of explicit loops when possible",
+                "Prefer Vec<T> over LinkedList<T> for most use cases",
+                "Use String for owned strings and &str for string slices",
+                "Consider using Box<T> for large types in structs",
+                "Use the release profile with optimizations for production builds"
+            ]
+        },
+        {
+            "name": "Concurrency",
+            "instructions": [
+                "Use tokio for async/await when dealing with I/O",
+                "Prefer message passing over shared state",
+                "Use Mutex<T> for interior mutability in concurrent contexts",
+                "Implement Send and Sync traits for thread-safe types",
+                "Use crossbeam for advanced concurrent data structures"
+            ]
+        },
+        {
+            "name": "Dependencies",
+            "instructions": [
+                "Keep dependencies minimal and up to date",
+                "Use semantic versioning in Cargo.toml",
+                "Prefer established crates from crates.io",
+                "Audit dependencies for security vulnerabilities",
+                "Use workspace members for multi-crate projects"
+            ]
+        },
+        {
+            "name": "Testing",
+            "instructions": [
+                "Write unit tests for public interfaces",
+                "Use integration tests in tests/ directory",
+                "Implement property-based testing with proptest when appropriate",
+                "Use cargo bench for performance benchmarks",
+                "Follow test naming convention: test_<function_name>_<scenario>"
+            ]
+        },
+        {
+            "name": "Documentation",
+            "instructions": [
+                "Document all public items with rustdoc comments",
+                "Include examples in documentation",
+                "Use cargo doc to generate documentation",
+                "Add README.md with clear usage instructions",
+                "Document unsafe code blocks extensively"
+            ]
+        },
+        {
+            "name": "Code Style",
+            "instructions": [
+                "Follow rustfmt conventions",
+                "Use clippy and fix all relevant warnings",
+                "Keep functions small and focused",
+                "Use meaningful variable names",
+                "Add type annotations for clarity when type inference is complex"
+            ]
+        }
+    ],
+    "examples": {
+        "good": [
+            {
+                "description": "Proper error handling",
+                "code": "fn read_config() -> Result<Config, ConfigError> {\n    let file = File::open(\"config.toml\").map_err(ConfigError::IoError)?;\n    // ...\n}"
+            },
+            {
+                "description": "Idiomatic iterator usage",
+                "code": "let sum: i32 = numbers.iter().filter(|x| **x > 0).sum();"
+            }
+        ],
+        "bad": [
+            {
+                "description": "Unsafe usage without documentation",
+                "code": "unsafe { *ptr = value; } // Bad: No explanation why unsafe is needed"
+            },
+            {
+                "description": "Improper error handling",
+                "code": "let config = read_config().unwrap(); // Bad: Panics on error"
+            }
+        ]
+    }
+}
