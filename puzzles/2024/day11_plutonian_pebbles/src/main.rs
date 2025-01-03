@@ -1,26 +1,25 @@
-use log::{debug, trace};
+use log::{debug, trace, info};
 use env_logger;
-use petgraph::graph::{DiGraph, NodeIndex};
-use petgraph::visit::EdgeRef;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
+/// Represents a stone with a numeric value and its string length.
+/// Each stone can be transformed according to specific rules based on
+/// its properties.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 struct Stone {
+    /// The numeric value of the stone
     num: u64,
+    /// The number of digits in the stone's numeric value
     length: u8
 }
 
-struct Node {
-    stone: Stone,
-    children: Vec<Child>
-}
-
-struct Child {
-    weight: u8,
-    node: Node
-}
-
 impl Stone {
+    /// Transforms the stone according to the following rules:
+    /// - If the stone's value is 0, it becomes 1
+    /// - If the stone's length is even, it splits into two stones (left and right halves)
+    /// - If the stone's length is odd, its value is multiplied by 2024
+    /// 
+    /// Returns a vector of new stones produced by the transformation.
     fn transition(&self) -> Vec<Stone> {
         if self.num == 0 {
             trace!("Stone {} (len {}) -> [1]", self.num, self.length);
@@ -52,205 +51,91 @@ impl Stone {
     }
 }
 
+/// Creates a new Stone from a string representation of a number.
+/// The length is automatically calculated from the number of digits.
+///
+/// # Arguments
+/// * `s` - A string slice containing a valid number
+///
+/// # Panics
+/// Panics if the string cannot be parsed as a u64
 fn create_stone_from_string(s: &str) -> Stone {
     let num = s.parse::<u64>().expect("Failed to parse number");
     let length = num.to_string().len() as u8;
     Stone { num, length }
 }
 
+/// Extracts a vector of Stones from a space-separated string of numbers.
+///
+/// # Arguments
+/// * `s` - A string slice containing space-separated numbers
+///
+/// # Returns
+/// A vector of Stone objects created from the input numbers
 fn extract_stones(s: &str) -> Vec<Stone> {
     s.split_whitespace()
         .map(|s| create_stone_from_string(s))
         .collect()
 }
 
-struct TransitionGraph {
-    graph: DiGraph<u64, u8>,
-    node_map: HashMap<u64, NodeIndex>,
+/// Recursively processes a stone for a given number of blinks, using memoization
+/// to avoid redundant calculations.
+///
+/// # Arguments
+/// * `stone` - The stone to process
+/// * `blinks_left` - Number of transformations remaining
+/// * `memo` - Memoization cache storing previously calculated results
+///
+/// # Returns
+/// The total number of stones that will be produced after all transformations
+fn process_stone(stone: &Stone, blinks_left: u8, memo: &mut HashMap<(Stone, u8), usize>) -> usize {
+    // Check if we've seen this combination before
+    let key = (stone.clone(), blinks_left);
+    if let Some(&result) = memo.get(&key) {
+        return result;
+    }
+
+    if blinks_left == 0 {
+        trace!("Stone {}", stone.num);
+        return 1;
+    }
+
+    let mut count = 0;
+    let children = stone.transition();
+    for child in children {
+        count += process_stone(&child, blinks_left - 1, memo);
+    }
+
+    // Store the result before returning
+    memo.insert(key, count);
+    count
 }
 
-impl TransitionGraph {
-    fn new() -> Self {
-        Self {
-            graph: DiGraph::new(),
-            node_map: HashMap::new(),
-        }
-    }
-
-    fn get_or_create_node(&mut self, num: u64) -> NodeIndex {
-        if let Some(&node_idx) = self.node_map.get(&num) {
-            node_idx
-        } else {
-            let node_idx = self.graph.add_node(num);
-            self.node_map.insert(num, node_idx);
-            node_idx
-        }
-    }
-
-    fn add_transition(&mut self, from: u64, to: u64, blinks: u8) {
-        let from_idx = self.get_or_create_node(from);
-        let to_idx = self.get_or_create_node(to);
-        self.graph.add_edge(from_idx, to_idx, blinks);
-    }
-
-    fn add_abbreviated_transitions(&mut self) {
-        debug!("Adding abbreviated transitions to graph");
-        // Single-digit transitions
-        self.add_transition(0, 1, 1);
-        debug!("Added: 0 -(1)-> 1");
-        
-        // 1's transitions (cost 3)
-        for &to in &[0, 2, 2, 4] {
-            self.add_transition(1, to, 3);
-            debug!("Added: 1 -(3)-> {}", to);
-        }
-
-        // 2's transitions (cost 3)
-        for &to in &[0, 4, 4, 8] {
-            self.add_transition(2, to, 3);
-            debug!("Added: 2 -(3)-> {}", to);
-        }
-
-        // 3's transitions (cost 3)
-        for &to in &[0, 0, 7, 2] {
-            self.add_transition(3, to, 3);
-            debug!("Added: 3 -(3)-> {}", to);
-        }
-
-        // 4's transitions (cost 3)
-        for &to in &[0, 6, 8, 9] {
-            self.add_transition(4, to, 3);
-            debug!("Added: 4 -(3)-> {}", to);
-        }
-
-        // 5's transitions (cost 5)
-        for &to in &[0, 0, 2, 2, 4, 8, 8, 8] {
-            self.add_transition(5, to, 5);
-            debug!("Added: 5 -(5)-> {}", to);
-        }
-
-        // 6's transitions (cost 5)
-        for &to in &[2, 4, 4, 5, 5, 6, 7, 9] {
-            self.add_transition(6, to, 5);
-            debug!("Added: 6 -(5)-> {}", to);
-        }
-
-        // 7's transitions (cost 5)
-        for &to in &[0, 2, 2, 3, 6, 6, 7, 8] {
-            self.add_transition(7, to, 5);
-            debug!("Added: 7 -(5)-> {}", to);
-        }
-
-        // 8's transitions (two paths)
-        self.add_transition(8, 8, 4); // Short path
-        debug!("Added: 8 -(4)-> 8");
-        for &to in &[2, 2, 3, 6, 7, 7] { // Long path
-            self.add_transition(8, to, 5);
-            debug!("Added: 8 -(5)-> {}", to);
-        }
-
-        // 9's transitions (cost 5)
-        for &to in &[1, 3, 4, 6, 6, 8, 8, 9] {
-            self.add_transition(9, to, 5);
-            debug!("Added: 9 -(5)-> {}", to);
-        }
-    }
-
-    fn process_stone(&self, stone: &Stone, blink_limit: u8) -> usize {
-        let mut stone_instances: HashMap<(u64, u8), HashSet<(u64, u8)>> = HashMap::new();
-        let mut stone_queue = vec![(stone.num, 0)];
-        stone_instances.insert((stone.num, 0), HashSet::new());
-
-        while let Some((current_num, blinks_used)) = stone_queue.pop() {
-            debug!("  Processing num {} at blink {}", current_num, blinks_used);
-            if blinks_used >= blink_limit {
-                debug!("    Skipping - exceeded blink limit");
-                continue;
-            }
-
-            let current_stone = Stone {
-                num: current_num,
-                length: current_num.to_string().len() as u8,
-            };
-
-            if current_num > 9 {
-                debug!("    Processing large number {}", current_num);
-                let next_stones = current_stone.transition();
-                let next_blinks = blinks_used + 1;
-                
-                if next_blinks <= blink_limit {
-                    let current_key = (current_num, blinks_used);
-                    for stone in next_stones {
-                        let next_key = (stone.num, next_blinks);
-                        stone_instances.entry(current_key)
-                            .or_insert_with(HashSet::new)
-                            .insert(next_key);
-                        
-                        debug!("      Queueing {} for processing at blink {}", 
-                            stone.num, next_blinks);
-                        stone_queue.push((stone.num, next_blinks));
-                        stone_instances.insert(next_key, HashSet::new());
-                    }
-                }
-            } else if let Some(&node_idx) = self.node_map.get(&current_num) {
-                debug!("    Found in transition graph");
-                for edge in self.graph.edges(node_idx) {
-                    let next_blinks = blinks_used + edge.weight();
-                    let next_num = self.graph[edge.target()];
-                    debug!("      Edge to {} with weight {} (total blinks: {})", 
-                        next_num, edge.weight(), next_blinks);
-                    
-                    if next_blinks <= blink_limit {
-                        let current_key = (current_num, blinks_used);
-                        let next_key = (next_num, next_blinks);
-                        
-                        stone_instances.entry(current_key)
-                            .or_insert_with(HashSet::new)
-                            .insert(next_key);
-                        
-                        debug!("        Queueing {} for processing at blink {}", next_num, next_blinks);
-                        stone_queue.push((next_num, next_blinks));
-                        stone_instances.insert(next_key, HashSet::new());
-                    } else {
-                        debug!("        Skipping - would exceed blink limit");
-                    }
-                }
-            }
-        }
-
-        // Count stones at the final state
-        let mut final_stones = HashSet::new();
-        for (&(num, blinks), transitions) in &stone_instances {
-            if transitions.is_empty() && blinks <= blink_limit {
-                final_stones.insert((num, blinks));
-            }
-        }
-
-        debug!("Final count for stone {}: {} stones", stone.num, final_stones.len());
-        final_stones.len()
-    }
-}
-
+/// Main function that:
+/// 1. Initializes logging
+/// 2. Reads input from "input.txt"
+/// 3. Processes each initial stone for 75 blinks
+/// 4. Prints the total number of stones produced and cache statistics
 fn main() {
     env_logger::init();
     debug!("Starting stone processing...");
 
-    let input = std::fs::read_to_string("sample_input.txt")
+    let input = std::fs::read_to_string("input.txt")
         .expect("Failed to read input file");
 
     let initial_stones = extract_stones(&input);
     debug!("Loaded {} initial stones", initial_stones.len());
 
-    let mut graph = TransitionGraph::new();
-    graph.add_abbreviated_transitions();
-
+    let mut memo = HashMap::new();
     let result: usize = initial_stones.iter()
         .map(|stone| {
-            let count = graph.process_stone(stone, 3);
+            info!("Processing stone {} from {}", stone.num, input);
+            let count = process_stone(stone, 75, &mut memo);
             debug!("Stone {} produced {} stones", stone.num, count);
             count
         })
         .sum();
     
     println!("Final result: {}", result);
+    println!("Memoization cache size: {}", memo.len());
 }
